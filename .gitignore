@@ -1,3 +1,5 @@
 ds-bc
 archive
 note.txt
+__pycache__
+.ipynb_checkpoints
