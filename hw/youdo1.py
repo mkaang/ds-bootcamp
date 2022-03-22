@@ -40,15 +40,15 @@ def main(verbosity=False):
     st.markdown("#### Loss Function")
     st.latex(
         r"\begin{equation}" + 
-        r"L(\beta_0,\beta_1)=\sum_{i=1}^{N}{(\max(\theta, |y_i - \hat{y}_i|))^2 }" +
+        r"L(\beta_0,\beta_1)=\sum_{i=1}^{N}{(\max(\theta, |y_i - \hat{y}_i|))^2} + \lambda (\beta_0^2 + \beta_1^2), \ \ \ \ \  \lambda > 0" +
         r"\end{equation}"
     )
     st.latex(
         r"\begin{equation}" + 
         r"L(\beta_0,\beta_1)=" + 
         r"\begin{cases}" + 
-        r"\sum_{i=1}^{N}{\theta^2}, & \text{if}\ |y_i - \hat{y}_i| <= \theta \\" + 
-        r"\sum_{i=1}^{N}{(y_i - \hat{y}_i)^2}, & \text{otherwise}" + 
+        r"\sum_{i=1}^{N}{\theta^2} + \lambda (\beta_0^2 + \beta_1^2), & \text{if}\ |y_i - \hat{y}_i| <= \theta , \ \ \ \ \  \lambda > 0 \\" + 
+        r"\sum_{i=1}^{N}{(y_i - \hat{y}_i)^2} + \lambda (\beta_0^2 + \beta_1^2), & \text{otherwise} , \ \ \ \ \  \lambda > 0" + 
         r"\end{cases}" + 
         r"\end{equation}"
         )
@@ -59,8 +59,8 @@ def main(verbosity=False):
         r"\begin{equation}" + 
         r"\frac{\partial L(\beta_0,\beta_1)}{\partial \beta_0}=" + 
         r"\begin{cases}" + 
-        r"0, & \text{if}\ |y_i - \hat{y}_i| <= \theta \\" + 
-        r"-2\sum_{i=1}^{N}{(y_i - \hat{y}_i)}, & \text{otherwise}" + 
+        r"2 \lambda \beta_0, & \text{if}\ |y_i - \hat{y}_i| <= \theta , \ \ \ \ \  \lambda > 0 \\" + 
+        r"-2\sum_{i=1}^{N}{(y_i - \hat{y}_i)} + 2 \lambda \beta_0, & \text{otherwise} , \ \ \ \ \  \lambda > 0 " + 
         r"\end{cases}" + 
         r"\end{equation}"
     )
@@ -68,8 +68,8 @@ def main(verbosity=False):
         r"\begin{equation}" + 
         r"\frac{\partial L(\beta_0,\beta_1)}{\partial \beta_0}=" + 
         r"\begin{cases}" + 
-        r"0, & \text{if}\ |y_i - \hat{y}_i| <= \theta \\" + 
-        r"-2\sum_{i=1}^{N}{(y_i - \hat{y}_i)x_i }, & \text{otherwise}" + 
+        r"2 \lambda \beta_1, & \text{if}\ |y_i - \hat{y}_i| <= \theta , \ \ \ \ \  \lambda > 0 \\" + 
+        r"-2\sum_{i=1}^{N}{(y_i - \hat{y}_i)x_i } + 2 \lambda \beta_1, & \text{otherwise} , \ \ \ \ \  \lambda > 0 " + 
         r"\end{cases}" + 
         r"\end{equation}"
     )
@@ -77,26 +77,38 @@ def main(verbosity=False):
     st.markdown("#### Is the loss function really convex? ")
     st.markdown("Check this out and see how it is look like")
 
-    threshold = 0.5
+    theta = st.slider("Threshold", 0.0, 10.0, value=0.1)
+    lambdar = st.slider("Lambda", 0.0, 1.0, value=0.1)
+
     losses = list()
-    for beta in np.linspace(-100, 100, 100) / 100:
-        loss = (y - beta * X['MedInc']) 
-        loss = np.where(loss<threshold, threshold, loss)
+    for beta in np.linspace(-1000, 1000, 100) / 100:
+        loss = (y - beta * X['MedInc']) - 2 * lambdar * beta 
+        loss = np.where(np.abs(loss)<theta, theta, loss)
         losses.append(np.sum(np.power(loss, 2)))
 
-    l = pd.DataFrame(dict(beta1=np.linspace(-100, 100, 100) / 100, losses=losses))
+    l = pd.DataFrame(dict(beta1=np.linspace(-1000, 1000, 100) / 100, losses=losses))
+
+    fig = px.scatter(l, x="beta1", y="losses")
+    st.plotly_chart(fig, use_container_width=True)
+
+    losses = list()
+    for beta in np.linspace(-1000, 1000, 100) / 100:
+        loss = (y - beta) - 2 * lambdar * beta 
+        loss = np.where(np.abs(loss)<theta, theta, loss)
+        losses.append(np.sum(np.power(loss, 2)))
+
+    l = pd.DataFrame(dict(beta0=np.linspace(-1000, 1000, 100) / 100, losses=losses))
+
+    fig = px.scatter(l, x="beta0", y="losses")
+    st.plotly_chart(fig, use_container_width=True)
 
     if verbosity: 
         st.dataframe(l)
 
-    fig = px.scatter(l, x="beta1", y="losses")
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    theta = st.slider("Threshold", 0.0, 10.0, value=0.1)
-    st.markdown(f"#### YouDo Model with threshold={theta} hyper-parameter selection")
-    beta_yd = reg(df['MedInc'].values, df['Price'].values, theta=theta, verbose=verbosity)
+    st.markdown(f"#### YouDo Model with threshold={theta}, lambda={lambdar} hyper-parameter selection")
+    beta_yd = reg(df['MedInc'].values, df['Price'].values, theta=theta, lambdar=lambdar, verbose=verbosity)
     st.latex(fr"Price = {beta_yd[1]:.4f} \times MedInc + {beta_yd[0]:.4f}")
+
 
     p = st.slider("Mixture Ratio (p)", 0.0, 1.0, value=0.8)
     st.markdown(f"#### WeDo model with p={p:.2f} contribution")
@@ -125,7 +137,7 @@ def main(verbosity=False):
 
     st.plotly_chart(fig, use_container_width=True)
 
-def reg(x, y, theta, verbose=False):
+def reg(x, y, theta, lambdar, verbose=False):
     beta = np.random.random(2)
 
     if verbose:
@@ -146,8 +158,8 @@ def reg(x, y, theta, verbose=False):
                 g_b1 = 0
             else:
                 # print(f"Beta: {beta}")
-                g_b0 = -2 * (_y - y_pred)
-                g_b1 = -2 * ((_y - y_pred) * _x)
+                g_b0 = -2 * (_y - y_pred) + 2 * lambdar * beta[0]
+                g_b1 = -2 * ((_y - y_pred) * _x) + 2 * lambdar * beta[1]
 
 
             beta[0] = beta[0] - alpha * g_b0
